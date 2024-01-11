@@ -1,0 +1,650 @@
+From 490a2b28fa2325f9929261aa2ee398fbb4c715dd Mon Sep 17 00:00:00 2001
+From: Marc Mueller <30130371+cdce8p@users.noreply.github.com>
+Date: Sat, 3 Apr 2021 16:12:19 -0400
+Subject: [PATCH 1/2] license_files - Add support for glob patterns + add
+ default patterns
+
+https://github.com/pypa/setuptools/pull/2620
+---
+ changelog.d/2620.breaking.rst         |  4 ++
+ changelog.d/2620.change.rst           |  1 +
+ changelog.d/2620.deprecation.rst      |  2 +
+ changelog.d/2620.doc.rst              |  1 +
+ docs/references/keywords.rst          | 11 +++++
+ docs/userguide/declarative_config.rst |  2 +-
+ setuptools/command/sdist.py           | 55 +++++++++++++---------
+ setuptools/tests/test_egg_info.py     | 68 +++++++++++++++++++++++++--
+ setuptools/tests/test_manifest.py     |  1 +
+ 9 files changed, 118 insertions(+), 27 deletions(-)
+ create mode 100644 changelog.d/2620.breaking.rst
+ create mode 100644 changelog.d/2620.change.rst
+ create mode 100644 changelog.d/2620.deprecation.rst
+ create mode 100644 changelog.d/2620.doc.rst
+
+diff --git a/changelog.d/2620.breaking.rst b/changelog.d/2620.breaking.rst
+new file mode 100644
+index 00000000..431e7105
+--- /dev/null
++++ b/changelog.d/2620.breaking.rst
+@@ -0,0 +1,4 @@
++If neither ``license_file`` nor ``license_files`` is specified, the ``sdist``
++option will now auto-include files that match the following patterns:
++``LICEN[CS]E*``, ``COPYING*``, ``NOTICE*``, ``AUTHORS*``.
++This matches the behavior of ``bdist_wheel``. -- by :user:`cdce8p`
+diff --git a/changelog.d/2620.change.rst b/changelog.d/2620.change.rst
+new file mode 100644
+index 00000000..5470592d
+--- /dev/null
++++ b/changelog.d/2620.change.rst
+@@ -0,0 +1 @@
++The ``license_file`` and ``license_files`` options now support glob patterns. -- by :user:`cdce8p`
+diff --git a/changelog.d/2620.deprecation.rst b/changelog.d/2620.deprecation.rst
+new file mode 100644
+index 00000000..1af5f246
+--- /dev/null
++++ b/changelog.d/2620.deprecation.rst
+@@ -0,0 +1,2 @@
++The ``license_file`` option is now marked as deprecated.
++Use ``license_files`` instead. -- by :user:`cdce8p`
+diff --git a/changelog.d/2620.doc.rst b/changelog.d/2620.doc.rst
+new file mode 100644
+index 00000000..7564adac
+--- /dev/null
++++ b/changelog.d/2620.doc.rst
+@@ -0,0 +1 @@
++Added documentation for the ``license_files`` option. -- by :user:`cdce8p`
+diff --git a/docs/references/keywords.rst b/docs/references/keywords.rst
+index 03ce9fa2..619b2d14 100644
+--- a/docs/references/keywords.rst
++++ b/docs/references/keywords.rst
+@@ -76,6 +76,17 @@ Keywords
+ ``license``
+     A string specifying the license of the package.
+ 
++``license_file``
++
++    .. warning::
++        ``license_file`` is deprecated. Use ``license_files`` instead.
++
++``license_files``
++
++    A list of glob patterns for license related files that should be included.
++    If neither ``license_file`` nor ``license_files`` is specified, this option
++    defaults to ``LICEN[CS]E*``, ``COPYING*``, ``NOTICE*``, and ``AUTHORS*``.
++
+ ``keywords``
+     A list of strings or a comma-separated string providing descriptive
+     meta-data. See: `PEP 0314`_.
+diff --git a/docs/userguide/declarative_config.rst b/docs/userguide/declarative_config.rst
+index bc66869b..1d2d66e2 100644
+--- a/docs/userguide/declarative_config.rst
++++ b/docs/userguide/declarative_config.rst
+@@ -184,7 +184,7 @@ maintainer_email                maintainer-email   str
+ classifiers                     classifier         file:, list-comma
+ license                                            str
+ license_file                                       str
+-license_files                                      list-comma
++license_files                                      list-comma         42.0.0
+ description                     summary            file:, str
+ long_description                long-description   file:, str
+ long_description_content_type                      str                38.6.0
+diff --git a/setuptools/command/sdist.py b/setuptools/command/sdist.py
+index 887b7efa..a6ea814a 100644
+--- a/setuptools/command/sdist.py
++++ b/setuptools/command/sdist.py
+@@ -4,6 +4,7 @@ import os
+ import sys
+ import io
+ import contextlib
++from glob import iglob
+ 
+ from setuptools.extern import ordered_set
+ 
+@@ -194,29 +195,41 @@ class sdist(sdist_add_defaults, orig.sdist):
+         """Checks if license_file' or 'license_files' is configured and adds any
+         valid paths to 'self.filelist'.
+         """
+-
+-        files = ordered_set.OrderedSet()
+-
+         opts = self.distribution.get_option_dict('metadata')
+ 
+-        # ignore the source of the value
+-        _, license_file = opts.get('license_file', (None, None))
+-
+-        if license_file is None:
+-            log.debug("'license_file' option was not specified")
+-        else:
+-            files.add(license_file)
+-
++        files = ordered_set.OrderedSet()
+         try:
+-            files.update(self.distribution.metadata.license_files)
++            license_files = self.distribution.metadata.license_files
+         except TypeError:
+             log.warn("warning: 'license_files' option is malformed")
+-
+-        for f in files:
+-            if not os.path.exists(f):
+-                log.warn(
+-                    "warning: Failed to find the configured license file '%s'",
+-                    f)
+-                files.remove(f)
+-
+-        self.filelist.extend(files)
++            license_files = ordered_set.OrderedSet()
++        patterns = license_files if isinstance(license_files, ordered_set.OrderedSet) \
++            else ordered_set.OrderedSet(license_files)
++
++        if 'license_file' in opts:
++            log.warn(
++                "warning: the 'license_file' option is deprecated, "
++                "use 'license_files' instead")
++            patterns.append(opts['license_file'][1])
++
++        if 'license_file' not in opts and 'license_files' not in opts:
++            # Default patterns match the ones wheel uses
++            # See https://wheel.readthedocs.io/en/stable/user_guide.html
++            # -> 'Including license files in the generated wheel file'
++            patterns = ('LICEN[CS]E*', 'COPYING*', 'NOTICE*', 'AUTHORS*')
++
++        for pattern in patterns:
++            for path in iglob(pattern):
++                if path.endswith('~'):
++                    log.debug(
++                        "ignoring license file '%s' as it looks like a backup",
++                        path)
++                    continue
++
++                if path not in files and os.path.isfile(path):
++                    log.info(
++                        "adding license file '%s' (matched pattern '%s')",
++                        path, pattern)
++                    files.add(path)
++
++        self.filelist.extend(sorted(files))
+diff --git a/setuptools/tests/test_egg_info.py b/setuptools/tests/test_egg_info.py
+index 1047468b..c93ed020 100644
+--- a/setuptools/tests/test_egg_info.py
++++ b/setuptools/tests/test_egg_info.py
+@@ -533,7 +533,7 @@ class TestEggInfo:
+             'setup.cfg': DALS("""
+                               """),
+             'LICENSE': "Test license"
+-        }, False),  # no license_file attribute
++        }, True),  # no license_file attribute, LICENSE auto-included
+         ({
+             'setup.cfg': DALS("""
+                               [metadata]
+@@ -541,7 +541,15 @@ class TestEggInfo:
+                               """),
+             'MANIFEST.in': "exclude LICENSE",
+             'LICENSE': "Test license"
+-        }, False)  # license file is manually excluded
++        }, False),  # license file is manually excluded
++        pytest.param({
++            'setup.cfg': DALS("""
++                              [metadata]
++                              license_file = LICEN[CS]E*
++                              """),
++            'LICENSE': "Test license",
++            }, True,
++            id="glob_pattern"),
+     ])
+     def test_setup_cfg_license_file(
+             self, tmpdir_cwd, env, files, license_in_sources):
+@@ -621,7 +629,7 @@ class TestEggInfo:
+             'setup.cfg': DALS("""
+                               """),
+             'LICENSE': "Test license"
+-        }, [], ['LICENSE']),  # no license_files attribute
++        }, ['LICENSE'], []),  # no license_files attribute, LICENSE auto-included
+         ({
+             'setup.cfg': DALS("""
+                               [metadata]
+@@ -640,7 +648,36 @@ class TestEggInfo:
+             'MANIFEST.in': "exclude LICENSE-XYZ",
+             'LICENSE-ABC': "ABC license",
+             'LICENSE-XYZ': "XYZ license"
+-        }, ['LICENSE-ABC'], ['LICENSE-XYZ'])  # subset is manually excluded
++        }, ['LICENSE-ABC'], ['LICENSE-XYZ']),  # subset is manually excluded
++        pytest.param({
++            'setup.cfg': "",
++            'LICENSE-ABC': "ABC license",
++            'COPYING-ABC': "ABC copying",
++            'NOTICE-ABC': "ABC notice",
++            'AUTHORS-ABC': "ABC authors",
++            'LICENCE-XYZ': "XYZ license",
++            'LICENSE': "License",
++            'INVALID-LICENSE': "Invalid license",
++            }, [
++            'LICENSE-ABC',
++            'COPYING-ABC',
++            'NOTICE-ABC',
++            'AUTHORS-ABC',
++            'LICENCE-XYZ',
++            'LICENSE',
++            ], ['INVALID-LICENSE'],
++            # ('LICEN[CS]E*', 'COPYING*', 'NOTICE*', 'AUTHORS*')
++            id="default_glob_patterns"),
++        pytest.param({
++            'setup.cfg': DALS("""
++                              [metadata]
++                              license_files =
++                                  LICENSE*
++                              """),
++            'LICENSE-ABC': "ABC license",
++            'NOTICE-XYZ': "XYZ notice",
++            }, ['LICENSE-ABC'], ['NOTICE-XYZ'],
++            id="no_default_glob_patterns"),
+     ])
+     def test_setup_cfg_license_files(
+             self, tmpdir_cwd, env, files, incl_licenses, excl_licenses):
+@@ -745,7 +782,28 @@ class TestEggInfo:
+             'LICENSE-PQR': "PQR license",
+             'LICENSE-XYZ': "XYZ license"
+             # manually excluded
+-        }, ['LICENSE-XYZ'], ['LICENSE-ABC', 'LICENSE-PQR'])
++        }, ['LICENSE-XYZ'], ['LICENSE-ABC', 'LICENSE-PQR']),
++        pytest.param({
++            'setup.cfg': DALS("""
++                              [metadata]
++                              license_file = LICENSE*
++                              """),
++            'LICENSE-ABC': "ABC license",
++            'NOTICE-XYZ': "XYZ notice",
++            }, ['LICENSE-ABC'], ['NOTICE-XYZ'],
++            id="no_default_glob_patterns"),
++        pytest.param({
++            'setup.cfg': DALS("""
++                              [metadata]
++                              license_file = LICENSE*
++                              license_files =
++                                NOTICE*
++                              """),
++            'LICENSE-ABC': "ABC license",
++            'NOTICE-ABC': "ABC notice",
++            'AUTHORS-ABC': "ABC authors",
++            }, ['LICENSE-ABC', 'NOTICE-ABC'], ['AUTHORS-ABC'],
++            id="combined_glob_patterrns"),
+     ])
+     def test_setup_cfg_license_file_license_files(
+             self, tmpdir_cwd, env, files, incl_licenses, excl_licenses):
+diff --git a/setuptools/tests/test_manifest.py b/setuptools/tests/test_manifest.py
+index 82bdb9c6..589cefb2 100644
+--- a/setuptools/tests/test_manifest.py
++++ b/setuptools/tests/test_manifest.py
+@@ -55,6 +55,7 @@ def touch(filename):
+ default_files = frozenset(map(make_local_path, [
+     'README.rst',
+     'MANIFEST.in',
++    'LICENSE',
+     'setup.py',
+     'app.egg-info/PKG-INFO',
+     'app.egg-info/SOURCES.txt',
+
+From e1aa3949d2b0d610f6d83bc3c85d96c5c4cabd3a Mon Sep 17 00:00:00 2001
+From: Marc Mueller <30130371+cdce8p@users.noreply.github.com>
+Date: Sat, 22 May 2021 20:00:24 -0400
+Subject: [PATCH 2/2] Add License-File field to package metadata
+
+https://github.com/pypa/setuptools/pull/2645
+---
+ changelog.d/2645.breaking.rst     |  3 ++
+ changelog.d/2645.change.rst       |  4 +++
+ setuptools/command/egg_info.py    |  9 +++++-
+ setuptools/command/sdist.py       | 46 --------------------------
+ setuptools/config.py              |  5 +++
+ setuptools/dist.py                | 54 ++++++++++++++++++++++++++++++-
+ setuptools/tests/test_egg_info.py | 54 ++++++++++++++++++++++++++++---
+ setuptools/tests/test_manifest.py |  1 -
+ 8 files changed, 122 insertions(+), 54 deletions(-)
+ create mode 100644 changelog.d/2645.breaking.rst
+ create mode 100644 changelog.d/2645.change.rst
+
+diff --git a/changelog.d/2645.breaking.rst b/changelog.d/2645.breaking.rst
+new file mode 100644
+index 00000000..b96b492a
+--- /dev/null
++++ b/changelog.d/2645.breaking.rst
+@@ -0,0 +1,3 @@
++License files excluded via the ``MANIFEST.in`` but matched by either
++the ``license_file`` (deprecated) or ``license_files`` options,
++will be nevertheless included in the source distribution. - by :user:`cdce8p`
+diff --git a/changelog.d/2645.change.rst b/changelog.d/2645.change.rst
+new file mode 100644
+index 00000000..b22385c1
+--- /dev/null
++++ b/changelog.d/2645.change.rst
+@@ -0,0 +1,4 @@
++Added ``License-File`` (multiple) to the output package metadata.
++The field will contain the path of a license file, matched by the
++``license_file`` (deprecated) and ``license_files`` options,
++relative to ``.dist-info``. - by :user:`cdce8p`
+diff --git a/setuptools/command/egg_info.py b/setuptools/command/egg_info.py
+index 1f120b67..18b81340 100644
+--- a/setuptools/command/egg_info.py
++++ b/setuptools/command/egg_info.py
+@@ -541,6 +541,7 @@ class manifest_maker(sdist):
+         self.add_defaults()
+         if os.path.exists(self.template):
+             self.read_template()
++        self.add_license_files()
+         self.prune_file_list()
+         self.filelist.sort()
+         self.filelist.remove_duplicates()
+@@ -575,7 +576,6 @@ class manifest_maker(sdist):
+ 
+     def add_defaults(self):
+         sdist.add_defaults(self)
+-        self.check_license()
+         self.filelist.append(self.template)
+         self.filelist.append(self.manifest)
+         rcfiles = list(walk_revctrl())
+@@ -592,6 +592,13 @@ class manifest_maker(sdist):
+         ei_cmd = self.get_finalized_command('egg_info')
+         self.filelist.graft(ei_cmd.egg_info)
+ 
++    def add_license_files(self):
++        license_files = self.distribution.metadata.license_files or []
++        for lf in license_files:
++            log.info("adding license file '%s'", lf)
++            pass
++        self.filelist.extend(license_files)
++
+     def prune_file_list(self):
+         build = self.get_finalized_command('build')
+         base_dir = self.distribution.get_fullname()
+diff --git a/setuptools/command/sdist.py b/setuptools/command/sdist.py
+index a6ea814a..4a014283 100644
+--- a/setuptools/command/sdist.py
++++ b/setuptools/command/sdist.py
+@@ -4,9 +4,6 @@ import os
+ import sys
+ import io
+ import contextlib
+-from glob import iglob
+-
+-from setuptools.extern import ordered_set
+ 
+ from .py36compat import sdist_add_defaults
+ 
+@@ -190,46 +187,3 @@ class sdist(sdist_add_defaults, orig.sdist):
+                 continue
+             self.filelist.append(line)
+         manifest.close()
+-
+-    def check_license(self):
+-        """Checks if license_file' or 'license_files' is configured and adds any
+-        valid paths to 'self.filelist'.
+-        """
+-        opts = self.distribution.get_option_dict('metadata')
+-
+-        files = ordered_set.OrderedSet()
+-        try:
+-            license_files = self.distribution.metadata.license_files
+-        except TypeError:
+-            log.warn("warning: 'license_files' option is malformed")
+-            license_files = ordered_set.OrderedSet()
+-        patterns = license_files if isinstance(license_files, ordered_set.OrderedSet) \
+-            else ordered_set.OrderedSet(license_files)
+-
+-        if 'license_file' in opts:
+-            log.warn(
+-                "warning: the 'license_file' option is deprecated, "
+-                "use 'license_files' instead")
+-            patterns.append(opts['license_file'][1])
+-
+-        if 'license_file' not in opts and 'license_files' not in opts:
+-            # Default patterns match the ones wheel uses
+-            # See https://wheel.readthedocs.io/en/stable/user_guide.html
+-            # -> 'Including license files in the generated wheel file'
+-            patterns = ('LICEN[CS]E*', 'COPYING*', 'NOTICE*', 'AUTHORS*')
+-
+-        for pattern in patterns:
+-            for path in iglob(pattern):
+-                if path.endswith('~'):
+-                    log.debug(
+-                        "ignoring license file '%s' as it looks like a backup",
+-                        path)
+-                    continue
+-
+-                if path not in files and os.path.isfile(path):
+-                    log.info(
+-                        "adding license file '%s' (matched pattern '%s')",
+-                        path, pattern)
+-                    files.add(path)
+-
+-        self.filelist.extend(sorted(files))
+diff --git a/setuptools/config.py b/setuptools/config.py
+index af3a3bcb..ece325e2 100644
+--- a/setuptools/config.py
++++ b/setuptools/config.py
+@@ -520,6 +520,11 @@ class ConfigMetadataHandler(ConfigHandler):
+             'obsoletes': parse_list,
+             'classifiers': self._get_parser_compound(parse_file, parse_list),
+             'license': exclude_files_parser('license'),
++            'license_file': self._deprecated_config_handler(
++                exclude_files_parser('license_file'),
++                "The license_file parameter is deprecated, "
++                "use license_files instead.",
++                DeprecationWarning),
+             'license_files': parse_list,
+             'description': parse_file,
+             'long_description': parse_file,
+diff --git a/setuptools/dist.py b/setuptools/dist.py
+index 050388de..bc663e63 100644
+--- a/setuptools/dist.py
++++ b/setuptools/dist.py
+@@ -14,6 +14,7 @@ import distutils.dist
+ from distutils.util import strtobool
+ from distutils.debug import DEBUG
+ from distutils.fancy_getopt import translate_longopt
++from glob import iglob
+ import itertools
+ 
+ from collections import defaultdict
+@@ -117,6 +118,8 @@ def read_pkg_file(self, file):
+         self.provides = None
+         self.obsoletes = None
+ 
++    self.license_files = _read_list('license-file')
++
+ 
+ def single_line(val):
+     # quick and dirty validation for description pypa/setuptools#1390
+@@ -199,6 +202,7 @@ def write_pkg_file(self, file):  # noqa: C901  # is too complex (14)  # FIXME
+         for extra in self.provides_extras:
+             write_field('Provides-Extra', extra)
+ 
++    self._write_list(file, 'License-File', self.license_files or [])
+ 
+ sequence = tuple, list
+ 
+@@ -398,7 +402,8 @@ class Distribution(_Distribution):
+         'long_description_content_type': None,
+         'project_urls': dict,
+         'provides_extras': ordered_set.OrderedSet,
+-        'license_files': ordered_set.OrderedSet,
++        'license_file': lambda: None,
++        'license_files': lambda: None,
+     }
+ 
+     _patched_dist = None
+@@ -557,6 +562,34 @@ class Distribution(_Distribution):
+         req.marker = None
+         return req
+ 
++    def _finalize_license_files(self):
++        """Compute names of all license files which should be included."""
++        license_files: Optional[List[str]] = self.metadata.license_files
++        patterns: List[str] = license_files if license_files else []
++
++        license_file: Optional[str] = self.metadata.license_file
++        if license_file and license_file not in patterns:
++            patterns.append(license_file)
++
++        if license_files is None and license_file is None:
++            # Default patterns match the ones wheel uses
++            # See https://wheel.readthedocs.io/en/stable/user_guide.html
++            # -> 'Including license files in the generated wheel file'
++            patterns = ('LICEN[CS]E*', 'COPYING*', 'NOTICE*', 'AUTHORS*')
++
++        self.metadata.license_files = list(
++            unique_everseen(self._expand_patterns(patterns)))
++
++    @staticmethod
++    def _expand_patterns(patterns):
++        return (
++            path
++            for pattern in patterns
++            for path in iglob(pattern)
++            if not path.endswith('~')
++            and os.path.isfile(path)
++        )
++
+     # FIXME: 'Distribution._parse_config_files' is too complex (14)
+     def _parse_config_files(self, filenames=None):  # noqa: C901
+         """
+@@ -680,6 +713,7 @@ class Distribution(_Distribution):
+         parse_configuration(self, self.command_options,
+                             ignore_option_errors=ignore_option_errors)
+         self._finalize_requires()
++        self._finalize_license_files()
+ 
+     def fetch_build_eggs(self, requires):
+         """Resolve pre-setup requirements"""
+@@ -1020,3 +1054,21 @@ class Distribution(_Distribution):
+ class DistDeprecationWarning(SetuptoolsDeprecationWarning):
+     """Class for warning about deprecations in dist in
+     setuptools. Not ignored by default, unlike DeprecationWarning."""
++
++
++def unique_everseen(iterable, key=None):
++    "List unique elements, preserving order. Remember all elements ever seen."
++    # unique_everseen('AAAABBBCCDAABBB') --> A B C D
++    # unique_everseen('ABBCcAD', str.lower) --> A B C D
++    seen = set()
++    seen_add = seen.add
++    if key is None:
++        for element in itertools.filterfalse(seen.__contains__, iterable):
++            seen_add(element)
++            yield element
++    else:
++        for element in iterable:
++            k = key(element)
++            if k not in seen:
++                seen_add(k)
++                yield element
+diff --git a/setuptools/tests/test_egg_info.py b/setuptools/tests/test_egg_info.py
+index c93ed020..e8b49732 100644
+--- a/setuptools/tests/test_egg_info.py
++++ b/setuptools/tests/test_egg_info.py
+@@ -541,7 +541,7 @@ class TestEggInfo:
+                               """),
+             'MANIFEST.in': "exclude LICENSE",
+             'LICENSE': "Test license"
+-        }, False),  # license file is manually excluded
++        }, True),  # manifest is overwritten by license_file
+         pytest.param({
+             'setup.cfg': DALS("""
+                               [metadata]
+@@ -637,7 +637,7 @@ class TestEggInfo:
+                               """),
+             'MANIFEST.in': "exclude LICENSE",
+             'LICENSE': "Test license"
+-        }, [], ['LICENSE']),  # license file is manually excluded
++        }, ['LICENSE'], []),  # manifest is overwritten by license_files
+         ({
+             'setup.cfg': DALS("""
+                               [metadata]
+@@ -648,7 +648,8 @@ class TestEggInfo:
+             'MANIFEST.in': "exclude LICENSE-XYZ",
+             'LICENSE-ABC': "ABC license",
+             'LICENSE-XYZ': "XYZ license"
+-        }, ['LICENSE-ABC'], ['LICENSE-XYZ']),  # subset is manually excluded
++            # manifest is overwritten by license_files
++        }, ['LICENSE-ABC', 'LICENSE-XYZ'], []),
+         pytest.param({
+             'setup.cfg': "",
+             'LICENSE-ABC': "ABC license",
+@@ -678,6 +679,17 @@ class TestEggInfo:
+             'NOTICE-XYZ': "XYZ notice",
+             }, ['LICENSE-ABC'], ['NOTICE-XYZ'],
+             id="no_default_glob_patterns"),
++        pytest.param({
++            'setup.cfg': DALS("""
++                              [metadata]
++                              license_files =
++                                  LICENSE-ABC
++                                  LICENSE*
++                              """),
++            'LICENSE-ABC': "ABC license",
++            }, ['LICENSE-ABC'], [],
++            id="files_only_added_once",
++        ),
+     ])
+     def test_setup_cfg_license_files(
+             self, tmpdir_cwd, env, files, incl_licenses, excl_licenses):
+@@ -781,8 +793,8 @@ class TestEggInfo:
+             'LICENSE-ABC': "ABC license",
+             'LICENSE-PQR': "PQR license",
+             'LICENSE-XYZ': "XYZ license"
+-            # manually excluded
+-        }, ['LICENSE-XYZ'], ['LICENSE-ABC', 'LICENSE-PQR']),
++            # manifest is overwritten
++        }, ['LICENSE-ABC', 'LICENSE-PQR', 'LICENSE-XYZ'], []),
+         pytest.param({
+             'setup.cfg': DALS("""
+                               [metadata]
+@@ -825,6 +837,38 @@ class TestEggInfo:
+         for lf in excl_licenses:
+             assert sources_lines.count(lf) == 0
+ 
++    def test_license_file_attr_pkg_info(self, tmpdir_cwd, env):
++        """All matched license files should have a corresponding License-File."""
++        self._create_project()
++        build_files({
++            "setup.cfg": DALS("""
++                              [metadata]
++                              license_files =
++                                  NOTICE*
++                                  LICENSE*
++                              """),
++            "LICENSE-ABC": "ABC license",
++            "LICENSE-XYZ": "XYZ license",
++            "NOTICE": "included",
++            "IGNORE": "not include",
++        })
++
++        environment.run_setup_py(
++            cmd=['egg_info'],
++            pypath=os.pathsep.join([env.paths['lib'], str(tmpdir_cwd)])
++        )
++        egg_info_dir = os.path.join('.', 'foo.egg-info')
++        with open(os.path.join(egg_info_dir, 'PKG-INFO')) as pkginfo_file:
++            pkg_info_lines = pkginfo_file.read().split('\n')
++        license_file_lines = [
++            line for line in pkg_info_lines if line.startswith('License-File:')]
++
++        # Only 'NOTICE', LICENSE-ABC', and 'LICENSE-XYZ' should have been matched
++        # Also assert that order from license_files is keeped
++        assert "License-File: NOTICE" == license_file_lines[0]
++        assert "License-File: LICENSE-ABC" in license_file_lines[1:]
++        assert "License-File: LICENSE-XYZ" in license_file_lines[1:]
++
+     def test_long_description_content_type(self, tmpdir_cwd, env):
+         # Test that specifying a `long_description_content_type` keyword arg to
+         # the `setup` function results in writing a `Description-Content-Type`
+diff --git a/setuptools/tests/test_manifest.py b/setuptools/tests/test_manifest.py
+index 589cefb2..82bdb9c6 100644
+--- a/setuptools/tests/test_manifest.py
++++ b/setuptools/tests/test_manifest.py
+@@ -55,7 +55,6 @@ def touch(filename):
+ default_files = frozenset(map(make_local_path, [
+     'README.rst',
+     'MANIFEST.in',
+-    'LICENSE',
+     'setup.py',
+     'app.egg-info/PKG-INFO',
+     'app.egg-info/SOURCES.txt',
