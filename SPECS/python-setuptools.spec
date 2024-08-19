@@ -35,7 +35,7 @@
 
 Name:           python-setuptools
 Version:        39.2.0
-Release:        7%{?dist}
+Release:        8%{?dist}
 Summary:        Easily build and distribute Python packages
 
 Group:          Applications/System
@@ -53,6 +53,13 @@ Patch0:         create-site-packages.patch
 # Regular Expression Denial of Service (ReDoS) in package_index.py
 # Resolved upstream: https://github.com/pypa/setuptools/commit/43a9c9bfa6aa626ec2a22540bea28d2ca77964be
 Patch1:         CVE-2022-40897.patch
+
+# Security fix for CVE-2024-6345
+# Remote code execution via download functions in the package_index module
+# Tracking bug: https://bugzilla.redhat.com/show_bug.cgi?id=2297771
+# Upstream solution: https://github.com/pypa/setuptools/pull/4332
+# Patch simplified because upstream doesn't support SVN anymore.
+Patch2:         CVE-2024-6345.patch
 
 BuildArch:      noarch
 
@@ -309,6 +316,10 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(pwd) py.test-%{python3_version} --ignore=
 
 
 %changelog
+* Wed Jul 24 2024 Lumír Balhar <lbalhar@redhat.com> - 39.2.0-8
+- Security fix for CVE-2024-6345
+Resolves: RHEL-50470
+
 * Wed Jan 11 2023 Charalampos Stratakis <cstratak@redhat.com> - 39.2.0-7
 - Security fix for CVE-2022-40897
 Resolves: rhbz#2158559
