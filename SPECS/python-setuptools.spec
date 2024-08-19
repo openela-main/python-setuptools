@@ -28,7 +28,7 @@
 Name:           python-setuptools
 # When updating, update the bundled libraries versions bellow!
 Version:        53.0.0
-Release:        12%{?dist}
+Release:        12%{?dist}.1
 Summary:        Easily build and distribute Python packages
 # setuptools is MIT
 # appdirs is MIT
@@ -63,6 +63,13 @@ Patch2:         https://github.com/pypa/setuptools/pull/2580.patch
 # Regular Expression Denial of Service (ReDoS) in package_index.py
 # Resolved upstream: https://github.com/pypa/setuptools/commit/43a9c9bfa6aa626ec2a22540bea28d2ca77964be
 Patch3:         CVE-2022-40897.patch
+
+# Security fix for CVE-2024-6345
+# Remote code execution via download functions in the package_index module
+# Tracking bug: https://bugzilla.redhat.com/show_bug.cgi?id=2297771
+# Upstream solution: https://github.com/pypa/setuptools/pull/4332
+# Patch simplified because upstream doesn't support SVN anymore.
+Patch4:         CVE-2024-6345.patch
 
 BuildArch:      noarch
 
@@ -234,6 +241,10 @@ PYTHONPATH=$(pwd) %pytest --ignore=pavement.py
 
 
 %changelog
+* Wed Jul 24 2024 Lumír Balhar <lbalhar@redhat.com> - 53.0.0-12.1
+- Security fix for CVE-2024-6345
+Resolves: RHEL-50466
+
 * Wed Jan 11 2023 Charalampos Stratakis <cstratak@redhat.com> - 53.0.0-12
 - Security fix for CVE-2022-40897
 Resolves: rhbz#2158559
