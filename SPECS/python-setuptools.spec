@@ -28,7 +28,7 @@
 Name:           python-setuptools
 # When updating, update the bundled libraries versions bellow!
 Version:        53.0.0
-Release:        12%{?dist}.1
+Release:        13%{?dist}
 Summary:        Easily build and distribute Python packages
 # setuptools is MIT
 # appdirs is MIT
@@ -241,9 +241,9 @@ PYTHONPATH=$(pwd) %pytest --ignore=pavement.py
 
 
 %changelog
-* Wed Jul 24 2024 Lumír Balhar <lbalhar@redhat.com> - 53.0.0-12.1
+* Wed Jul 24 2024 Lumír Balhar <lbalhar@redhat.com> - 53.0.0-13
 - Security fix for CVE-2024-6345
-Resolves: RHEL-50466
+Resolves: RHEL-49978
 
 * Wed Jan 11 2023 Charalampos Stratakis <cstratak@redhat.com> - 53.0.0-12
 - Security fix for CVE-2022-40897
