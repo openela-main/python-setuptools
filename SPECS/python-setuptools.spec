@@ -28,7 +28,7 @@
 Name:           python-setuptools
 # When updating, update the bundled libraries versions bellow!
 Version:        53.0.0
-Release:        13%{?dist}
+Release:        13%{?dist}.1
 Summary:        Easily build and distribute Python packages
 # setuptools is MIT
 # appdirs is MIT
@@ -70,6 +70,12 @@ Patch3:         CVE-2022-40897.patch
 # Upstream solution: https://github.com/pypa/setuptools/pull/4332
 # Patch simplified because upstream doesn't support SVN anymore.
 Patch4:         CVE-2024-6345.patch
+
+# Security fix for CVE-2025-47273
+# Path traversal in PackageIndex.download leads to Arbitrary File Write
+# Upstream solution: https://github.com/pypa/setuptools/pull/4951/
+Patch5:         CVE-2025-47273.patch
+
 
 BuildArch:      noarch
 
@@ -241,6 +247,10 @@ PYTHONPATH=$(pwd) %pytest --ignore=pavement.py
 
 
 %changelog
+* Thu Jun 19 2025 Tomáš Hrnčiar <thrnciar@redhat.com> - 53.0.0-13.1
+- Security fix for CVE-2025-47273
+Resolves: RHEL-96807
+
 * Wed Jul 24 2024 Lumír Balhar <lbalhar@redhat.com> - 53.0.0-13
 - Security fix for CVE-2024-6345
 Resolves: RHEL-49978
