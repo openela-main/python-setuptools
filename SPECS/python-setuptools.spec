@@ -35,7 +35,7 @@
 
 Name:           python-setuptools
 Version:        39.2.0
-Release:        8%{?dist}
+Release:        9%{?dist}
 Summary:        Easily build and distribute Python packages
 
 Group:          Applications/System
@@ -60,6 +60,12 @@ Patch1:         CVE-2022-40897.patch
 # Upstream solution: https://github.com/pypa/setuptools/pull/4332
 # Patch simplified because upstream doesn't support SVN anymore.
 Patch2:         CVE-2024-6345.patch
+
+# Security fix for CVE-2025-47273
+# Path traversal in PackageIndex.download leads to Arbitrary File Write
+# Upstream solution: https://github.com/pypa/setuptools/pull/4951/
+Patch3:         CVE-2025-47273.patch
+
 
 BuildArch:      noarch
 
@@ -316,6 +322,10 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=$(pwd) py.test-%{python3_version} --ignore=
 
 
 %changelog
+* Wed Jun 18 2025 Tomáš Hrnčiar <thrnciar@redhat.com> - 39.2.0-9
+- Security fix for CVE-2025-47273
+Resolves: RHEL-96802
+
 * Wed Jul 24 2024 Lumír Balhar <lbalhar@redhat.com> - 39.2.0-8
 - Security fix for CVE-2024-6345
 Resolves: RHEL-50470
