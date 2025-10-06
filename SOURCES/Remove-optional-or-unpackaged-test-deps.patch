@@ -1,0 +1,48 @@
+From 850efbc4dfe5b8c64dd21617bc856ba0d4e3a082 Mon Sep 17 00:00:00 2001
+From: Lumir Balhar <lbalhar@redhat.com>
+Date: Wed, 20 Sep 2023 19:47:05 +0200
+Subject: [PATCH] Remove optional or unpackaged test deps
+
+---
+ setup.cfg | 14 --------------
+ 1 file changed, 14 deletions(-)
+
+diff --git a/setup.cfg b/setup.cfg
+index c7aaf14..33b9cd7 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -42,17 +42,7 @@ exclude =
+ [options.extras_require]
+ testing = 
+ 	pytest >= 6
+-	pytest-checkdocs >= 2.4
+-	pytest-black >= 0.3.7; \
+-	python_implementation != "PyPy"
+-	pytest-cov; \
+-	python_implementation != "PyPy"
+-	pytest-mypy >= 0.9.1; \
+-	python_implementation != "PyPy"
+-	pytest-enabler >= 2.2
+-	pytest-ruff; sys_platform != "cygwin"
+ 	
+-	flake8-2020
+ 	virtualenv>=13.0.0
+ 	wheel
+ 	pip>=19.1 # For proper file:// URLs support.
+@@ -60,13 +50,9 @@ testing =
+ 	pytest-xdist
+ 	jaraco.path>=3.2.0
+ 	build[virtualenv]
+-	filelock>=3.4.0
+ 	ini2toml[lite]>=0.9
+ 	tomli-w>=1.0.0
+ 	pytest-timeout
+-	pytest-perf; \
+-	sys_platform != "cygwin"
+-	jaraco.develop >= 7.21; python_version >= "3.9" and sys_platform != "cygwin"
+ testing-integration = 
+ 	pytest
+ 	pytest-xdist
+-- 
+2.41.0
+
