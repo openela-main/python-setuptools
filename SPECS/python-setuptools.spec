@@ -28,7 +28,7 @@
 Name:           python-setuptools
 # When updating, update the bundled libraries versions bellow!
 Version:        53.0.0
-Release:        13%{?dist}.1
+Release:        15%{?dist}
 Summary:        Easily build and distribute Python packages
 # setuptools is MIT
 # appdirs is MIT
@@ -212,6 +212,10 @@ mkdir -p %{buildroot}%{python_wheel_dir}
 install -p dist/%{python_wheel_name} -t %{buildroot}%{python_wheel_dir}
 %endif
 
+# Make sure the INSTALLER is not pip and remove RECORD
+echo rpm > %{buildroot}%{python3_sitelib}/setuptools-%{version}.dist-info/INSTALLER
+rm %{buildroot}%{python3_sitelib}/setuptools-%{version}.dist-info/RECORD
+
 %if %{with tests}
 %check
 # Verify bundled provides are up to date
@@ -247,9 +251,13 @@ PYTHONPATH=$(pwd) %pytest --ignore=pavement.py
 
 
 %changelog
-* Thu Jun 19 2025 Tomáš Hrnčiar <thrnciar@redhat.com> - 53.0.0-13.1
+* Wed Jun 18 2025 Tomáš Hrnčiar <thrnciar@redhat.com> - 53.0.0-15
 - Security fix for CVE-2025-47273
-Resolves: RHEL-96807
+Resolves: RHEL-96808
+
+* Fri Mar 07 2025 Tomáš Hrnčiar <thrnciar@redhat.com> - 53.0.0-14
+- Make sure the INSTALLER is not pip and remove RECORD
+- Resolves: RHEL-82609
 
 * Wed Jul 24 2024 Lumír Balhar <lbalhar@redhat.com> - 53.0.0-13
 - Security fix for CVE-2024-6345
